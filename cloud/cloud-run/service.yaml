@@ -1,0 +1,97 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: auto-note-writer
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        # 最大インスタンス数
+        autoscaling.knative.dev/maxScale: "10"
+        # 最小インスタンス数（コールドスタート対策）
+        autoscaling.knative.dev/minScale: "0"
+        # CPU使用率でのスケーリング設定
+        autoscaling.knative.dev/targets: "cpu-utilization:70"
+        # タイムアウト設定（Puppeteerの実行時間を考慮）
+        run.googleapis.com/timeout: "900s"
+        # CPU常時割り当て（Puppeteerの安定性向上）
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      # サービスアカウント
+      serviceAccountName: auto-note-writer-sa
+      containers:
+      - name: auto-note-writer
+        image: gcr.io/PROJECT_ID/auto-note-writer:latest
+        ports:
+        - name: http1
+          containerPort: 8080
+        # リソース設定
+        resources:
+          limits:
+            # Puppeteerのメモリ使用量を考慮
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        # 環境変数
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: GCP_PROJECT_ID
+          value: "PROJECT_ID"
+        # Secret Managerから環境変数を取得
+        - name: AMAZON_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: amazon-access-key
+              key: latest
+        - name: AMAZON_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: amazon-secret-key
+              key: latest
+        - name: AMAZON_ASSOCIATE_TAG
+          valueFrom:
+            secretKeyRef:
+              name: amazon-associate-tag
+              key: latest
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-api-key
+              key: latest
+        - name: NOTE_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: note-email
+              key: latest
+        - name: NOTE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: note-password
+              key: latest
+        # ヘルスチェック
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      # 最大リクエスト処理時間
+      timeoutSeconds: 900

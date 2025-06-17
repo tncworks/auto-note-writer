@@ -1,0 +1,98 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+
+      - name: Check test coverage
+        run: npm run test -- --coverage
+        continue-on-error: true
+
+  dockerfile-lint:
+    name: Dockerfile Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: warning
+
+  validate-config:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate package.json
+        run: |
+          npm install -g ajv-cli
+          # package.jsonの基本的な検証
+          node -e "const pkg = require('./package.json'); console.log('Package validation passed');"
+
+      - name: Check for required files
+        run: |
+          test -f src/main.js || (echo "src/main.js not found" && exit 1)
+          test -f docker/Dockerfile || (echo "docker/Dockerfile not found" && exit 1)
+          test -f cloud/deploy.sh || (echo "cloud/deploy.sh not found" && exit 1)
+          test -f .env.example || (echo ".env.example not found" && exit 1)
+          echo "All required files found"
+
+      - name: Validate environment variables
+        run: |
+          # .env.exampleの必須変数をチェック
+          required_vars=(
+            "AMAZON_ACCESS_KEY"
+            "AMAZON_SECRET_KEY"
+            "AMAZON_ASSOCIATE_TAG"
+            "OPENAI_API_KEY"
+            "NOTE_EMAIL"
+            "NOTE_PASSWORD"
+            "GCP_PROJECT_ID"
+          )
+          
+          for var in "${required_vars[@]}"; do
+            if ! grep -q "^${var}=" .env.example; then
+              echo "Required environment variable $var not found in .env.example"
+              exit 1
+            fi
+          done
+          echo "Environment variables validation passed"

@@ -1,0 +1,37 @@
+# Cloud Scheduler設定
+schedulers:
+  # 毎日の投稿スケジュール
+  - name: daily-note-posting
+    description: "毎日note.comに商品記事を自動投稿"
+    schedule: "0 9 * * *"  # 毎日9:00 JST
+    timezone: "Asia/Tokyo"
+    target:
+      type: "pubsub"
+      topic: "auto-note-writer-tasks"
+      payload:
+        task: "daily-post"
+        options:
+          publishNow: true
+          hashtags: ["シンプル", "おしゃれ", "アイテム", "Amazon"]
+    
+  # 週次ヘルスチェック
+  - name: weekly-health-check
+    description: "システムのヘルスチェックを実行"
+    schedule: "0 8 * * 1"  # 毎週月曜日8:00 JST
+    timezone: "Asia/Tokyo"
+    target:
+      type: "pubsub"
+      topic: "auto-note-writer-tasks"
+      payload:
+        task: "health-check"
+
+  # 月次レポート（オプション）
+  - name: monthly-report
+    description: "月次投稿レポートの生成"
+    schedule: "0 10 1 * *"  # 毎月1日10:00 JST
+    timezone: "Asia/Tokyo"
+    target:
+      type: "pubsub"
+      topic: "auto-note-writer-tasks"
+      payload:
+        task: "monthly-report"
